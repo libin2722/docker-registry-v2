@@ -6,6 +6,7 @@ nginx:
     - registry:registry
   volumes:
     - ./nginx/:/etc/nginx/conf.d
+  restart: always
 registry:
   image: registry:latest
   ports:
