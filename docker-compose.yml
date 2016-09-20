@@ -8,10 +8,32 @@ nginx:
     - ./nginx/:/etc/nginx/conf.d
   restart: always
 registry:
-  image: registry:latest
+  image: daocloud.io/libin2722/registry:latest
   ports:
     - 127.0.0.1:5000:5000
   environment:
     REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /data
+    CACHE_REDIS_HOST: redis
+    CACHE_REDIS_PORT: 6379
+    SEARCH_BACKEND: sqlalchemy
+    SETTINGS_FLAVOR: local
+    #SQLALCHEMY_INDEX_DATABASE: "sqlite:////var/docker-registry-storage/docker-registry.db"
+    SQLALCHEMY_INDEX_DATABASE: "mysql://root:123456@mysql:3306/registry"
+    STORAGE_PATH: /var/docker-registry-storage
+  restart: always
+  links:
+    - redis:redis
+    - mysql:mysql
   volumes:
     - ./data:/data
+redis:
+  image: redis:latest
+  restart: always
+mysql:
+  image: daocloud.io/libin2722/mysql
+  ports:
+    - 3306:3306
+  environment:
+    MYSQL_ROOT_PASSWORD: 123456
+    MYSQL_DATABASE: registry
+  restart: always
