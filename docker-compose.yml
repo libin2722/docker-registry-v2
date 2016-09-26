@@ -30,7 +30,7 @@ redis:
   image: daocloud.io/libin2722/redis:latest
   restart: always
 mysql:
-  image: daocloud.io/libin2722/mysql
+  image: daocloud.io/libin2722/mysql:latest
   ports:
     - 3306:3306
   volumes:
