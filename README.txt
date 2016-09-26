@@ -17,6 +17,7 @@ computer information
 		mkdir -p /opt/docker && cd $_
 		git clone https://github.com/libin2722/docker-registry-v2.git
 		cd /opt/docker/docker-registry-v2
+		# 这里将 nginx/registry.conf 文件中#    auth_basic_user_file /etc/nginx/conf.d/registry.password;注释了，因为domeos不支持带用户名密码的访问
 		docker-compose up &
 		# 执行mysql脚本
 		
