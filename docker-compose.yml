@@ -27,7 +27,7 @@ registry:
   volumes:
     - ./data/registry:/data
 redis:
-  image: redis:latest
+  image: daocloud.io/libin2722/redis:latest
   restart: always
 mysql:
   image: daocloud.io/libin2722/mysql
