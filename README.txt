@@ -13,6 +13,7 @@ computer information
 
 	Docker-Registry-v2
 		systemctl stop firewalld
+		systemctl disable firewalld
 		echo '192.168.116.141 terry.com' >> /etc/hosts
 		mkdir -p /opt/docker && cd $_
 		git clone https://github.com/libin2722/docker-registry-v2.git
@@ -23,6 +24,7 @@ computer information
 		
 	DomeOS
 		systemctl stop firewalld
+		systemctl disable firewalld
 		echo '192.168.116.141 registry.terry.com' >> /etc/hosts
 		scp root@192.168.116.141:/opt/docker/docker-registry-v2/nginx/devdockerCA.crt /etc/pki/ca-trust/source/anchors/
 		update-ca-trust enable
@@ -39,6 +41,7 @@ computer information
 		
 	etcd-slave-1
 		systemctl stop firewalld
+		systemctl disable firewalld
 		echo '192.168.116.141 registry.terry.com' >> /etc/hosts
 		curl -O http://domeos-script.bjctc.scs.sohucs.com/start_etcd.sh
 		chmod +x start_etcd.sh
@@ -49,6 +52,7 @@ computer information
     
 	etcd-slave-2
 		systemctl stop firewalld
+		systemctl disable firewalld
 		echo '192.168.116.141 registry.terry.com' >> /etc/hosts
 		curl -O http://domeos-script.bjctc.scs.sohucs.com/start_etcd.sh
 		chmod +x start_etcd.sh
@@ -59,6 +63,7 @@ computer information
 		
 	etcd-slave-3
 		systemctl stop firewalld
+		systemctl disable firewalld
 		echo '192.168.116.141 registry.terry.com' >> /etc/hosts
 		curl -O http://domeos-script.bjctc.scs.sohucs.com/start_etcd.sh
 		chmod +x start_etcd.sh
@@ -71,6 +76,7 @@ computer information
 	Kubernetes_master
 		yum remove docker-engine
 		systemctl stop firewalld
+		systemctl disable firewalld
 		echo '192.168.116.141 registry.terry.com' >> /etc/hosts
 		scp root@192.168.116.141:/opt/docker/docker-registry-v2/nginx/devdockerCA.crt /etc/pki/ca-trust/source/anchors/
 		update-ca-trust enable
@@ -186,4 +192,126 @@ EOF
 		#验证
 		
 		/usr/sbin/domeos/k8s/current/kubectl  --server 192.168.116.138:8080 get nodes
+		
+		
+		
+	Kubernetes_master
+		curl -O http://domeos-script.bjctc.scs.sohucs.com/dns.yaml
+		
+			修改：
+				apiVersion: v1
+				kind: Service
+				metadata:
+				  name: skydns-svc
+				  labels:
+					app: skydns-svc
+					version: v9
+				spec:
+				  selector:
+					app: skydns
+					version: v9
+				  type: ClusterIP
+				  clusterIP: 172.16.40.1
+				  ports:
+					- name: dns
+					  port: 53
+					  protocol: UDP
+					- name: dns-tcp
+					  port: 53
+					  protocol: TCP
+				---
+				apiVersion: v1
+				kind: ReplicationController
+				metadata:
+				  name: skydns
+				  labels:
+					app: skydns
+					version: v9
+				spec:
+				  replicas: 1
+				  selector:
+					app: skydns
+					version: v9
+				  template:
+					metadata:
+					  labels:
+						app: skydns
+						version: v9
+					spec:
+					  containers:
+						- name: skydns
+						  image: pub.domeos.org/domeos/skydns:1.5
+						  command:
+							- "/skydns"
+						  args:
+							- "--machines=http://http://192.168.116.145:4012,http://192.168.116.147:4012,http://192.168.116.153:4012"
+							- "--domain=domeos.local"
+							- "--addr=0.0.0.0:53"
+							- "--nameservers=192.168.116.2:53"
+						  ports:
+							- containerPort: 53
+							  name: dns-udp
+							  protocol: UDP
+							- containerPort: 53
+							  name: dns-tcp
+							  protocol: TCP
+				---
+				apiVersion: v1
+				kind: ReplicationController
+				metadata:
+				  name: kube2sky
+				  labels:
+					app: kube2sky
+					version: v9
+				spec:
+				  replicas: 1
+				  selector:
+					app: kube2sky
+					version: v9
+				  template:
+					metadata:
+					  labels:
+						app: kube2sky
+						version: v9
+					spec:
+					  containers:
+						- name: kube2sky
+						  image: pub.domeos.org/domeos/kube2sky:0.4
+						  command:
+							- "/kube2sky"
+						  args:
+							- "--etcd-server=http://192.168.116.145:4012"
+							- "--domain=domeos.local"
+							- "--kube_master_url=http://0.0.0.1:8080"
+		
+		kubectl --server 192.168.116.138:8080 create -f dns.yaml
+		
+		验证
+
+			1.通过以下命令获取集群svc列表，确认skydns-svc是否已创建：
+
+			 kubectl --server <kube-apiserver服务地址> get svc
+			 kubectl --server  192.168.116.138:8080 get svc
+			
+			2.通过以下命令获取集群pod列表，确认skydns-为前缀和kube2sky-为前缀的两个pod是否处于Running状态，如skydns-u44ey和kube2sky-2h1b9：
+
+			 kubectl --server <kube-apiserver服务地址> get pods
+			 kubectl --server 192.168.116.138:8080 get pods
+			  
+			3.查看node上的/etc/resolv.conf文件，确认前两行是否为如下内容(其中的domeos.local为--cluster-domain参数的值，172.16.40.1为--cluster-dns参数的值):
+
+			 search default.svc.domeos.local svc.domeos.local domeos.local
+			 nameserver 172.16.40.1
+			若没有，添加如上格式内容
+
+			4.在node上进行dns解析验证，方式有多种，如：
+			
+			 nslookup skydns-svc.default.svc.domeos.local
+			 安装 nslookup：yum install -y bind-utils
+			如果没有安装nslookup，也可通过ping间接验证：
+
+			 ping skydns-svc.default.svc.domeos.local -c 1
+			解析出IP地址则说明dns服务创建成功。
+
+			5.在通过kubernetes创建的容器内部验证，方法同步骤4。
 
